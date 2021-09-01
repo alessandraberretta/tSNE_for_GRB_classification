@@ -78,7 +78,7 @@ def gen_data():
             FT2 = np.power(np.absolute(FT), 2)
             
             # FT_total.append(FT2)
-            yield pd.Series(FT2,index=list(range(len(FT2)))]
+            yield pd.Series(FT2,index=list(range(len(FT2))))
 
 df = pd.DataFrame(gen_data())
 
