@@ -34,56 +34,58 @@ for idx, elm in enumerate(GRB_name):
 
 reference_point = ((np.amax(T90_list))/0.064)*5
 
-for elm in tqdm(list_file): 
+def gen_data():
+    for elm in tqdm(list_file, desc="gen data"): 
+        text = elm.split('_')[3]
+        trig_id = text[8:-4]
+        lc_64 = fits.open(elm)
 
-    text = elm.split('_')[3]
-    trig_id = text[8:-4]
-    lc_64 = fits.open(elm)
+        data = lc_64[1].data 
 
-    data = lc_64[1].data 
-        
-    # TIME = data['TIME'] - trig_time[idx]
-    RATE = data['RATE']
-    # ERROR = data['ERROR']
+        # TIME = data['TIME'] - trig_time[idx]
+        RATE = data['RATE']
+        # ERROR = data['ERROR']
 
-    ene_15_25 = []
-    ene_25_50 = []
-    ene_50_100 = []
-    ene_100_350 = []
-    for elm in RATE:
-        ene_15_25.append(elm[0])
-        ene_25_50.append(elm[1])
-        ene_50_100.append(elm[2])
-        ene_100_350.append(elm[3])
+        ene_15_25 = []
+        ene_25_50 = []
+        ene_50_100 = []
+        ene_100_350 = []
+        for elm in RATE:
+            ene_15_25.append(elm[0])
+            ene_25_50.append(elm[1])
+            ene_50_100.append(elm[2])
+            ene_100_350.append(elm[3])
 
-    list_ene = [ene_15_25, ene_25_50, ene_50_100, ene_100_350]
+        list_ene = [ene_15_25, ene_25_50, ene_50_100, ene_100_350]
 
-    padded_channels = []
+        padded_channels = []
 
-    for channel in list_ene:
-        padded_channels.append(np.pad(
-            channel, (0, round(reference_point)-len(channel)), 'constant'))
+        for channel in list_ene:
+            padded_channels.append(np.pad(
+                channel, (0, round(reference_point)-len(channel)), 'constant'))
 
-    total_rate = np.concatenate(
-        (padded_channels[0], padded_channels[1], padded_channels[2], padded_channels[3]))
+        total_rate = np.concatenate(
+            (padded_channels[0], padded_channels[1], padded_channels[2], padded_channels[3]))
 
-    normalization = np.sum(total_rate)/len(total_rate)
+        normalization = np.sum(total_rate)/len(total_rate)
 
-    if normalization: 
+        if normalization: 
 
-        normalized_total_rate = total_rate/normalization
+            normalized_total_rate = total_rate/normalization
 
-        FT = np.fft.fft(normalized_total_rate)/len(normalized_total_rate)
+            FT = np.fft.fft(normalized_total_rate)/len(normalized_total_rate)
 
-        FT2 = np.power(np.absolute(FT), 2)
+            FT2 = np.power(np.absolute(FT), 2)
+            
+            # FT_total.append(FT2)
+            yield pd.Series(FT2,index=list(range(len(FT2)))]
 
-        FT_total.append(FT2)
-
-df = pd.DataFrame(FT_total, columns=[i for i in range(len(FT_total[0]))])
+df = pd.DataFrame(gen_data())
 
 #print(df)
 
-df.to_csv('fft_GRBs.txt', index=False, sep=' ')
+# df.to_csv('fft_GRBs.txt', index=False, sep=' ')
+df.to_parquet("fft_GRBs.parquet")
 
 
 
