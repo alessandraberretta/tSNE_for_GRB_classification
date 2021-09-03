@@ -7,10 +7,6 @@ import matplotlib.pyplot as plt
 from decimal import Decimal
 from tqdm import tqdm
 from sklearn import manifold, datasets
-from sklearn.datasets import load_digits
-import matplotlib.pyplot as plt
-import pandas as pd
-import pylab
 import altair as alt
 
 
@@ -49,13 +45,8 @@ def gen_data():
     for elm in tqdm(list_file, desc="gen data"):
 
         # trig_id = elm.split('/')[3][4:-18]
+
         trig_id = elm.split('_')[6][8:-4]
-
-        for idx, trig in enumerate(trig_ID):
-            if trig_id == str(trig):
-                T90_single = abs(T90_stop[idx] - T90_start[idx])
-
-        T90_GRBs.append(T90_single)
 
         # text = elm.split('_')[3]
         # trig_id = text[8:-4]
@@ -93,17 +84,35 @@ def gen_data():
 
         if normalization:
 
+            for idx, trig in enumerate(trig_ID):
+
+                if trig_id == str(trig):
+
+                    T90_single = abs(T90_stop[idx] - T90_start[idx])
+
+            T90_GRBs.append(T90_single)
+
             normalized_total_rate = total_rate/normalization
 
             FT = np.fft.fft(normalized_total_rate)/len(normalized_total_rate)
 
             FT2 = np.power(np.absolute(FT), 2)
 
-            # FT_total.append(FT2)
+            FT_total.append(FT2)
             yield pd.Series(FT2, index=[f"col{col:02d}" for col in list(range(len(FT2)))])
 
 
 df = pd.DataFrame(gen_data())
+
+temporal_class = []
+
+for elm in T90_GRBs:
+
+    if elm > 2:
+        temporal_class.append('long')
+    else:
+        temporal_class.append('short')
+
 
 # print(df)
 
@@ -112,23 +121,28 @@ df = pd.DataFrame(gen_data())
 
 # X = np.loadtxt("/Users/alessandraberretta/Desktop/fft_GRBs.txt")
 
-tsne = manifold.TSNE()
+tsne = manifold.TSNE(perplexity=20.0)
 X_embedded = tsne.fit_transform(df)
 
-df2 = pd.DataFrame(
-    {"x": X_embedded[:, 0], "y": X_embedded[:, 0], "z": np.log10(T90_GRBs)})
+# df2 = pd.DataFrame("x": X_embedded[:, 0], "y": X_embedded[:, 1], "log10(T90)": np.log10(T90_GRBs)})
 
-brush = alt.selection(type="interval")
+
+'''
+domain = ['short', 'long']
+range_ = ['red', 'blue']
+
 points = (
     alt.Chart(df2)
     .mark_point()
-    .encode(x="x:Q", y="y:Q", color='z')).interactive()
+    .encode(x="x:Q", y="y:Q", color=alt.Color('log10(T90)')))
 
 points.show()
+'''
 
-# scatter = plt.scatter(X_embedded[:, 0], X_embedded[:, 0])
-# plt.colorbar(scatter)
-# plt.show()
+scatter = plt.scatter(X_embedded[:, 0], X_embedded[:, 1], c=(
+    np.log10(T90_GRBs)), cmap='viridis')
+plt.colorbar()
+plt.show()
 
 
 '''
