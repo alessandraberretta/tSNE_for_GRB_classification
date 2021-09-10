@@ -26,10 +26,25 @@ T90_list = []
 
 T90_GRBs = []
 
+temporal_class = []
+
 path_GRB = '/Users/alessandraberretta/tSNE_for_GRB_classification/lc_64ms_swift_GRB/'
 
 list_file = [path_GRB +
              file for file in os.listdir(path_GRB) if file.endswith('.lc')]
+
+TF_before = False
+
+FT_rate = False
+
+single_channel = False
+
+standard = True
+
+FT2_channels = []
+
+normalized_total_rate_GRBs = []
+
 
 for idx, elm in enumerate(GRB_name):
 
@@ -37,37 +52,78 @@ for idx, elm in enumerate(GRB_name):
 
     T90_list.append(T90)
 
-reference_point = ((np.amax(T90_list))/0.064)*3
+reference_point = np.amax(T90_list)/0.064
+
+
+def nextpower(num, base):
+    i = 1
+    while i < num:
+        i *= base
+    return i
+
+
+pow2 = nextpower(reference_point, 2)
+# print(pow2)
+
+RATE_GRBs = []
+
+'''
+for elm in tqdm(list_file):
+
+    lc_64 = fits.open(elm)
+
+    data = lc_64[1].data
+
+    RATE = data['RATE']
+
+    RATE_GRBs.append(len(RATE))
+
+ref_point = np.amax(RATE_GRBs) + 100
+'''
 
 
 def gen_data():
 
     for elm in tqdm(list_file, desc="gen data"):
 
-        # trig_id = elm.split('/')[3][4:-18]
-
         trig_id = elm.split('_')[6][8:-4]
 
-        # text = elm.split('_')[3]
-        # trig_id = text[8:-4]
+        t90start = T90_start[np.where(trig_ID == float(trig_id))]
+        t90stop = T90_stop[np.where(trig_ID == float(trig_id))]
+        trigtime = trig_time[np.where(trig_ID == float(trig_id))]
 
         lc_64 = fits.open(elm)
 
         data = lc_64[1].data
 
-        # TIME = data['TIME'] - trig_time[idx]
+        TIME = data['TIME']
         RATE = data['RATE']
+
+        # df_lc = pd.DataFrame(TIME, RATE, columns=['Time', 'Rate'])
+
+        # print(df_lc)
+
         # ERROR = data['ERROR']
 
         ene_15_25 = []
         ene_25_50 = []
         ene_50_100 = []
         ene_100_350 = []
-        for elm in RATE:
-            ene_15_25.append(elm[0])
-            ene_25_50.append(elm[1])
-            ene_50_100.append(elm[2])
-            ene_100_350.append(elm[3])
+
+        for idx, elm in enumerate(RATE):
+
+            if (t90start+trigtime)-0.1*abs(t90stop - t90start) < TIME[idx] < (t90stop+trigtime)+0.1*abs(t90stop - t90start):
+
+                if not np.all(elm == 0):
+                    ene_15_25.append(elm[0])
+                    ene_25_50.append(elm[1])
+                    ene_50_100.append(elm[2])
+                    ene_100_350.append(elm[3])
+
+        # dict_lc = {'Time': TIME, 'Rate_15_25': ene_15_25, 'Rate_25_50': ene_25_50,
+        # 'Rate_50_100': ene_50_100, 'Rate_100_350': ene_100_350}
+
+        # df_lc = pd.DataFrame(dict_lc)
 
         list_ene = [ene_15_25, ene_25_50, ene_50_100, ene_100_350]
 
@@ -75,14 +131,61 @@ def gen_data():
 
         for channel in list_ene:
             padded_channels.append(np.pad(
-                channel, (0, round(reference_point)-len(channel)), 'constant'))
+                channel, (0, pow2-len(channel)), 'constant'))
 
-        total_rate = np.concatenate(
-            (padded_channels[0], padded_channels[1], padded_channels[2], padded_channels[3]))
+        if single_channel:
 
-        normalization = np.sum(total_rate)/len(total_rate)
+            normalization = np.sum(padded_channels[0])
 
-        if normalization:
+            if normalization:
+
+                for idx, trig in enumerate(trig_ID):
+
+                    if trig_id == str(trig):
+
+                        T90_single = abs(T90_stop[idx] - T90_start[idx])
+
+                T90_GRBs.append(T90_single)
+
+                normalized_chan = padded_channels[0]/normalization
+
+                # FT = np.fft.fft(normalized_chan)/len(normalized_chan)
+
+                # FT2 = np.power(np.absolute(FT), 2)
+
+                yield pd.Series(normalized_chan, index=[f"col{col:02d}" for col in list(range(len(normalized_chan)))])
+
+        if TF_before:
+
+            for chan in padded_channels:
+
+                normalization = np.sum(chan)
+
+                if normalization:
+
+                    for idx, trig in enumerate(trig_ID):
+
+                        if trig_id == str(trig):
+
+                            T90_single = abs(T90_stop[idx] - T90_start[idx])
+
+                            if T90_single < 2:
+
+                                temporal_class.append('short')
+
+                            else:
+
+                                temporal_class.append('long')
+
+                    T90_GRBs.append(T90_single)
+
+                    normalized_chan = chan/normalization
+
+                    FT = np.fft.fft(normalized_chan)/len(normalized_chan)
+
+                    FT2 = np.power(np.absolute(FT), 2)
+
+                    FT2_channels.append(FT2)
 
             for idx, trig in enumerate(trig_ID):
 
@@ -92,346 +195,67 @@ def gen_data():
 
             T90_GRBs.append(T90_single)
 
-            normalized_total_rate = total_rate/normalization
+            total_rate = np.concatenate(
+                (FT2_channels[0], FT2_channels[1], FT2_channels[2], FT2_channels[3]))
 
-            FT = np.fft.fft(normalized_total_rate)/len(normalized_total_rate)
+            yield pd.Series(total_rate, index=[f"col{col:02d}" for col in list(range(len(total_rate)))])
 
-            FT2 = np.power(np.absolute(FT), 2)
+        if standard:
 
-            FT_total.append(FT2)
-            yield pd.Series(FT2, index=[f"col{col:02d}" for col in list(range(len(FT2)))])
+            total_rate = np.concatenate(
+                (padded_channels[0], padded_channels[1], padded_channels[2], padded_channels[3]))
+
+            normalization = np.sum(total_rate)
+            # /len(total_rate)
+
+            if normalization:
+
+                for idx, trig in enumerate(trig_ID):
+
+                    if trig_id == str(trig):
+
+                        T90_single = abs(T90_stop[idx] - T90_start[idx])
+
+                T90_GRBs.append(T90_single)
+
+                normalized_total_rate = total_rate/normalization
+
+                if FT_rate:
+
+                    # normalized_total_rate_GRBs.append(normalized_total_rate)
+
+                    yield pd.Series(normalized_total_rate, index=[f"col{col:02d}" for col in list(range(len(normalized_total_rate)))])
+
+                else:
+
+                    FT = np.fft.fft(normalized_total_rate) / \
+                        len(normalized_total_rate)
+
+                    FT2 = np.power(np.absolute(FT), 2)
+
+                    # FT_total.append(FT2)
+                    yield pd.Series(FT2, index=[f"col{col:02d}" for col in list(range(len(FT2)))])
 
 
 df = pd.DataFrame(gen_data())
+# df2 = pd.DataFrame(T90_GRBs)
+# df3 = df.append(df2, sort=False)
+# print(temporal_class)
 
-temporal_class = []
-
-for elm in T90_GRBs:
-
-    if elm > 2:
-        temporal_class.append('long')
-    else:
-        temporal_class.append('short')
-
-
-# print(df)
 
 # df.to_csv('fft_GRBs.txt', index=False, sep=' ')
 # df.to_parquet("fft_GRBs.parquet")
 
 # X = np.loadtxt("/Users/alessandraberretta/Desktop/fft_GRBs.txt")
 
-tsne = manifold.TSNE(perplexity=20.0)
+tsne = manifold.TSNE(perplexity=30.0)
 X_embedded = tsne.fit_transform(df)
 
-# df2 = pd.DataFrame("x": X_embedded[:, 0], "y": X_embedded[:, 1], "log10(T90)": np.log10(T90_GRBs)})
 
-
-'''
-domain = ['short', 'long']
-range_ = ['red', 'blue']
-
-points = (
-    alt.Chart(df2)
-    .mark_point()
-    .encode(x="x:Q", y="y:Q", color=alt.Color('log10(T90)')))
-
-points.show()
-'''
-
+fig, ax = plt.subplots()
 scatter = plt.scatter(X_embedded[:, 0], X_embedded[:, 1], c=(
     np.log10(T90_GRBs)), cmap='viridis')
+# ax.set_xlim(-40, 40)
+# ax.set_ylim(-40, 40)
 plt.colorbar()
 plt.show()
-
-
-'''
-def Hbeta(D=np.array([]), beta=1.0):
-    """
-        Compute the perplexity and the P-row for a specific value of the
-        precision of a Gaussian distribution.
-    """
-
-    # Compute P-row and corresponding perplexity
-    P = np.exp(-D.copy() * beta)
-    sumP = sum(P)
-    H = np.log(sumP) + beta * np.sum(D * P) / sumP
-    P = P / sumP
-    return H, P
-
-
-def x2p(X=np.array([]), tol=1e-5, perplexity=30.0):
-    """
-        Performs a binary search to get P-values in such a way that each
-        conditional Gaussian has the same perplexity.
-    """
-
-    # Initialize some variables
-    print("Computing pairwise distances...")
-    (n, d) = X.shape
-    sum_X = np.sum(np.square(X), 1)
-    D = np.add(np.add(-2 * np.dot(X, X.T), sum_X).T, sum_X)
-    P = np.zeros((n, n))
-    beta = np.ones((n, 1))
-    logU = np.log(perplexity)
-
-    # Loop over all datapoints
-    for i in range(n):
-
-        # Print progress
-        if i % 500 == 0:
-            print("Computing P-values for point %d of %d..." % (i, n))
-
-        # Compute the Gaussian kernel and entropy for the current precision
-        betamin = -np.inf
-        betamax = np.inf
-        Di = D[i, np.concatenate((np.r_[0:i], np.r_[i+1:n]))]
-        (H, thisP) = Hbeta(Di, beta[i])
-
-        # Evaluate whether the perplexity is within tolerance
-        Hdiff = H - logU
-        tries = 0
-        while np.abs(Hdiff) > tol and tries < 50:
-
-            # If not, increase or decrease precision
-            if Hdiff > 0:
-                betamin = beta[i].copy()
-                if betamax == np.inf or betamax == -np.inf:
-                    beta[i] = beta[i] * 2.
-                else:
-                    beta[i] = (beta[i] + betamax) / 2.
-            else:
-                betamax = beta[i].copy()
-                if betamin == np.inf or betamin == -np.inf:
-                    beta[i] = beta[i] / 2.
-                else:
-                    beta[i] = (beta[i] + betamin) / 2.
-
-            # Recompute the values
-            (H, thisP) = Hbeta(Di, beta[i])
-            Hdiff = H - logU
-            tries += 1
-
-        # Set the final row of P
-        P[i, np.concatenate((np.r_[0:i], np.r_[i+1:n]))] = thisP
-
-    # Return final P-matrix
-    print("Mean value of sigma: %f" % np.mean(np.sqrt(1 / beta)))
-    return P
-
-
-def pca(X=np.array([]), no_dims=50):
-    """
-        Runs PCA on the NxD array X in order to reduce its dimensionality to
-        no_dims dimensions.
-    """
-
-    print("Preprocessing the data using PCA...")
-    (n, d) = X.shape
-    X = X - np.tile(np.mean(X, 0), (n, 1))
-    (l, M) = np.linalg.eig(np.dot(X.T, X))
-    Y = np.dot(X, M[:, 0:no_dims])
-    return Y
-
-
-def tsne(X=np.array([]), no_dims=2, initial_dims=50, perplexity=30.0):
-    """
-        Runs t-SNE on the dataset in the NxD array X to reduce its
-        dimensionality to no_dims dimensions. The syntaxis of the function is
-        `Y = tsne.tsne(X, no_dims, perplexity), where X is an NxD NumPy array.
-    """
-
-    # Check inputs
-    if isinstance(no_dims, float):
-        print("Error: array X should have type float.")
-        return -1
-    if round(no_dims) != no_dims:
-        print("Error: number of dimensions should be an integer.")
-        return -1
-
-    # Initialize variables
-    X = pca(X, initial_dims).real
-    (n, d) = X.shape
-    max_iter = 1000
-    initial_momentum = 0.5
-    final_momentum = 0.8
-    eta = 500
-    min_gain = 0.01
-    Y = np.random.randn(n, no_dims)
-    dY = np.zeros((n, no_dims))
-    iY = np.zeros((n, no_dims))
-    gains = np.ones((n, no_dims))
-
-    # Compute P-values
-    P = x2p(X, 1e-5, perplexity)
-    P = P + np.transpose(P)
-    P = P / np.sum(P)
-    P = P * 4.									# early exaggeration
-    P = np.maximum(P, 1e-12)
-
-    # Run iterations
-    for iter in range(max_iter):
-
-        # Compute pairwise affinities
-        sum_Y = np.sum(np.square(Y), 1)
-        num = -2. * np.dot(Y, Y.T)
-        num = 1. / (1. + np.add(np.add(num, sum_Y).T, sum_Y))
-        num[range(n), range(n)] = 0.
-        Q = num / np.sum(num)
-        Q = np.maximum(Q, 1e-12)
-
-        # Compute gradient
-        PQ = P - Q
-        for i in range(n):
-            dY[i, :] = np.sum(np.tile(PQ[:, i] * num[:, i],
-                                      (no_dims, 1)).T * (Y[i, :] - Y), 0)
-
-        # Perform the update
-        if iter < 20:
-            momentum = initial_momentum
-        else:
-            momentum = final_momentum
-        gains = (gains + 0.2) * ((dY > 0.) != (iY > 0.)) + \
-                (gains * 0.8) * ((dY > 0.) == (iY > 0.))
-        gains[gains < min_gain] = min_gain
-        iY = momentum * iY - eta * (gains * dY)
-        Y = Y + iY
-        Y = Y - np.tile(np.mean(Y, 0), (n, 1))
-
-        # Compute current value of cost function
-        if (iter + 1) % 10 == 0:
-            C = np.sum(P * np.log(P / Q))
-            print("Iteration %d: error is %f" % (iter + 1, C))
-
-        # Stop lying about P-values
-        if iter == 100:
-            P = P / 4.
-
-    # Return solution
-    return Y
-
-
-if __name__ == "__main__":
-    # print("Run Y = tsne.tsne(X, no_dims, perplexity) to perform t-SNE on your dataset.")
-    # print("Running example on 2,500 MNIST digits...")
-    # X = np.loadtxt("/Users/alessandraberretta/Desktop/fft_5_GRBs.txt")
-    # labels = np.loadtxt("mnist2500_labels.txt")
-    Y = tsne(df, 2, 50, 20.0)
-    pylab.scatter(Y[:, 0], Y[:, 1], 20)
-    # pylab.savefig()
-    pylab.show()
-
-
-
-lc_070306_64 = (fits.open(
-    '/Users/alessandraberretta/Desktop/sw00263361000b_4chan_64ms.lc'), "070306")
-lc_070129_64 = (fits.open(
-    '/Users/alessandraberretta/Desktop/sw00258408000b_4chan_64ms.lc'), "070129")
-lc_070208_64 = (fits.open(
-    '/Users/alessandraberretta/Desktop/sw00259714000b_4chan_64ms.lc'), "070208")
-lc_070411_64 = (fits.open(
-    '/Users/alessandraberretta/Desktop/sw00275087000b_4chan_64ms.lc'), "070411")
-lc_070714B_64 = (fits.open(
-    '/Users/alessandraberretta/Desktop/sw00284856000b_4chan_64ms.lc'), "070714B")
-
-
-for lc in [lc_070306_64, lc_070129_64, lc_070208_64, lc_070411_64, lc_070714B_64]:
-
-    data = (lc[0])[1].data
-
-    name = lc[1]
-
-    for idx, elm in enumerate(GRB_name):
-        if name in elm:
-
-            T90 = abs(T90_stop[idx] - T90_start[idx])
-
-            T90_list.append(T90)
-
-reference_point = ((np.amax(T90_list))/0.064)*3
-
-
-for lc in [lc_070306_64, lc_070129_64, lc_070208_64, lc_070411_64, lc_070714B_64]:
-
-    data = (lc[0])[1].data
-
-    name = lc[1]
-
-    for idx, elm in enumerate(GRB_name):
-        if name in elm:
-            TIME = data['TIME'] - trig_time[idx]
-            RATE = data['RATE']
-            ERROR = data['ERROR']
-
-            ene_15_25 = []
-            ene_25_50 = []
-            ene_50_100 = []
-            ene_100_350 = []
-            for elm in RATE:
-                ene_15_25.append(elm[0])
-                ene_25_50.append(elm[1])
-                ene_50_100.append(elm[2])
-                ene_100_350.append(elm[3])
-
-            list_ene = [ene_15_25, ene_25_50, ene_50_100, ene_100_350]
-            print(len(ene_15_25))
-
-            padded_channels = []
-
-            for channel in list_ene:
-                padded_channels.append(np.pad(
-                    channel, (0, round(reference_point)-len(channel)), 'constant'))
-
-            total_rate = np.concatenate(
-                (padded_channels[0], padded_channels[1], padded_channels[2], padded_channels[3]))
-
-            normalization = np.sum(total_rate)/len(total_rate)
-
-            normalized_total_rate = total_rate/normalization
-
-            FT = np.fft.fft(total_rate)/len(total_rate)
-
-            FT2 = np.power(np.absolute(FT), 2)
-
-            FT_total.append(FT2)
-
-df = pd.DataFrame({
-    'col_1': ['%.6E' % Decimal(x) for x in FT_total[0]],
-    'col_2': ['%.6E' % Decimal(x) for x in FT_total[1]],
-    'col_3': ['%.6E' % Decimal(x) for x in FT_total[2]],
-    'col_4': ['%.6E' % Decimal(x) for x in FT_total[3]],
-    'col_5': ['%.6E' % Decimal(x) for x in FT_total[4]],
-})
-
-df_transposed = df.T
-
-# print(df)
-
-df_transposed.to_csv('fft_5_GRBs.txt', index=False)
-
-
-
-
-time = np.arange(0, 100, 0.1)
-amplitude = np.sin(time)
-FT = (np.fft.fft(amplitude))/len(amplitude)
-FT2 = np.power(np.absolute(FT), 2)
-# print(FT2)
-freq = np.fft.fftfreq(time.shape[-1])
-# print(freq)
-fig, ax = plt.subplots(2)
-ax[0].plot(time, amplitude, color='black')
-ax[1].plot(freq, FT2, color='red')
-# plt.show()
-
-fig, ax = plt.subplots(4)
-ax[0].plot(TIME, ene_15_25, color='black')
-ax[1].plot(TIME, ene_25_50, color='red')
-ax[2].plot(TIME, ene_50_100, color='green')
-ax[3].plot(TIME, ene_100_350, color='blue')
-ax[0].set_xlim(-300, 300)
-ax[1].set_xlim(-300, 300)
-ax[2].set_xlim(-300, 300)
-ax[3].set_xlim(-300, 300)
-plt.show()
-'''
