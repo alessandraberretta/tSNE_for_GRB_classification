@@ -12,24 +12,44 @@ import altair as alt
 
 np.set_printoptions(threshold=sys.maxsize)
 
-long_trig_ID = []
+GRB_fit_name = []
+trig = []
+T90_GRBs = []
+T100_GRBs = []
+T90_list = []
+T100_list = []
+temporal_class = []
+names = []
+grb_jetfit_tsne = []
+FT2_channels = []
+trigID_str = []
+strange_trigID = []
+
+TF_before = False
+FT_rate = False
+single_channel = True
+standard = False
 
 summary = pd.read_csv(
-    '/Users/alessandraberretta/tSNE_for_GRB_classification/summary_burst_durations.txt', delimiter='|', converters={' Trig_ID ': lambda x: str(x).strip()})
+    '/Users/alessandraberretta/tSNE_for_GRB_classification/summary_burst_durations.txt', delimiter='|')
 trig_time = summary[' Trig_time_met '].values
 trig_ID = summary[' Trig_ID '].values
-for elm in trig_ID:
-    if len(elm) > 6:
-        print(elm)
+for trig in trig_ID:
+    trigID_str.append(trig)
+    if len(str(trig)) == 8:
+        datafile = '/Users/alessandraberretta/tSNE_for_GRB_classification/lc_64ms_swift_GRB/sw000' + \
+            str(trig) + 'b_4chan_64ms.lc'
+        strange_trigID.append((str(trig), datafile))
+    if len(str(trig)) == 9:
+        datafile = '/Users/alessandraberretta/tSNE_for_GRB_classification/lc_64ms_swift_GRB/sw00' + \
+            str(trig) + 'b_4chan_64ms.lc'
+        strange_trigID.append((str(trig), datafile))
+
 GRB_name = summary['## GRBname '].values
 T90_start = summary[' T90_start '].values
 T90_stop = summary[' T90_stop '].values
 T100_start = summary[' T100_start '].values
 T100_stop = summary[' T100_stop '].values
-
-GRB_fit_name = []
-
-trig = []
 
 path_GRB = '/Users/alessandraberretta/tSNE_for_GRB_classification/lc_64ms_swift_GRB/'
 
@@ -40,66 +60,6 @@ path_dirs = '/Users/alessandraberretta/'
 dirs_list = [path_dirs +
              dir for dir in os.listdir(path_dirs) if dir.endswith('results')]
 
-'''
-for elm in tqdm(list_file):
-    trig_id = elm.split('_')[6][8:-4]
-    GRBname = GRB_name[np.where(trig_ID == float(trig_id))]
-    GRBname_string = np.array2string(GRBname)
-    nomi.append(GRBname_string[2:-5])
-
-nomi_2 = []
-
-for n in nomi:
-    if n.endswith(' '):
-        nomi_2.append(n[3:-1])
-    else:
-        nomi_2.append(n[3:])
-
-# print('original number of GRBs:', len(nomi))
-for elm in dirs_list:
-    filename_contour = [
-        elm + '/' + file for file in os.listdir(elm) if file.startswith('contour')]
-    for file in filename_contour:
-        GRB_fit_name.append(file.split('_')[5])
-        for id, f in enumerate(nomi):
-            if file.split('_')[5] + '   ' in f:
-                # print(file.split('_')[5])
-                common_name.append(file.split('_')[5])
-                trig.append(trig_ID[id])
-
-comuni = []
-for idx_GRB, elm_GRB in enumerate(GRB_fit_name):
-    if elm_GRB in nomi_2:
-        comuni.append(elm_GRB)
-'''
-
-len_TIME_list = []
-
-FT_total = []
-
-T90_list = []
-T100_list = []
-
-T90_GRBs = []
-T100_GRBs = []
-
-temporal_class = []
-
-names = []
-
-grb_jetfit_tsne = []
-
-TF_before = False
-
-FT_rate = False
-
-single_channel = True
-
-standard = False
-
-FT2_channels = []
-
-normalized_total_rate_GRBs = []
 
 for idx, elm in enumerate(GRB_name):
 
@@ -159,22 +119,39 @@ pow2 = nextpower(reference_point, 2)
 
 RATE_GRBs = []
 
+GRB_summary = []
+
+'''
+for elm in tqdm(list_file):
+    trig_id = elm.split('_')[6][8:-4]
+    for id, BAT_trig in enumerate(trig_ID):
+        if trig_id in trig_ID:
+            t90start = T90_start[id]
+            t90stop = T90_stop[id]
+            t100start = T100_start[id]
+            t100stop = T100_stop[id]
+            trigtime = trig_time[id]
+            GRBname = GRB_name[id]
+            GRB_summary.append((GRBname, trig_ID[id], trigtime, t90start,
+                                t90stop, t100start, t100stop))
+print(len(GRB_summary))
+'''
+
 
 def gen_data():
 
     for elm in tqdm(list_file, desc="gen data"):
 
         trig_id = elm.split('_')[6][8:-4]
-        # if trig_id in long_trig_ID:
+
         t90start = T90_start[np.where(trig_ID == float(trig_id))]
         t90stop = T90_stop[np.where(trig_ID == float(trig_id))]
         t100start = T100_start[np.where(trig_ID == float(trig_id))]
         t100stop = T100_stop[np.where(trig_ID == float(trig_id))]
         trigtime = trig_time[np.where(trig_ID == float(trig_id))]
         GRBname = GRB_name[np.where(trig_ID == float(trig_id))]
-
-        # trig_id = elm.split('_')[7][8:-4]
         '''
+        # trig_id = elm.split('_')[7][8:-4]
         for i, el in enumerate(trig_ID):
             if trig_id in trig_ID:
                 t90start = T90_start[i]
@@ -208,41 +185,31 @@ def gen_data():
 
         fault_grb = []
 
-        for idx, elm in enumerate(RATE):
-            if np.all((elm == 0.0)):
+        for idx, r in enumerate(RATE):
+            if np.all((r == 0.0)):
                 fault_grb.append(False)
             else:
                 fault_grb.append(True)
         if not any(fault_grb):
+            print('all 0s datafile:', trig_id)
             continue
 
-        for idx, elm in enumerate(RATE):
-            '''
-            if trig_id == '576738' or trig_id == '753445' or trig_id == '352108':
+        for idx, rate in enumerate(RATE):
 
-                print(TIME[idx])
-                print(t90start)
-                print(t90stop)
-                print(trigtime)
-                print((t90start+trigtime)-0.1*(np.absolute(t90stop - t90start)))
-                print((t90stop+trigtime)+0.1*(np.absolute(t90stop - t90start)))
+            if trig_id == '576738' or trig_id == '753445' or trig_id == '352108' or trig_id == '377179' or trig_id == '209351' or trig_id == '449578' or trig_id == '271019' or trig_id == '770958' or trig_id == '426114':
 
-                if TIME[idx] > (t90start+trigtime)-(np.absolute(t90stop - t90start)) and TIME[idx] < (t90stop+trigtime)+(np.absolute(t90stop - t90start)):
-                    ene_15_25.append(elm[0])
-                    ene_25_50.append(elm[1])
-                    ene_50_100.append(elm[2])
-                    ene_100_350.append(elm[3])
-            '''
-            if TIME[idx] > (t90start+trigtime)-0.1*(np.absolute(t90stop - t90start)) and TIME[idx] < (t90stop+trigtime)+0.1*(np.absolute(t90stop - t90start)):
-                # if np.all((elm == 0)):
-                # fault_grb.append(False)
-                # continue
-                # else:
-                # fault_grb.append(True)
-                ene_15_25.append(elm[0])
-                ene_25_50.append(elm[1])
-                ene_50_100.append(elm[2])
-                ene_100_350.append(elm[3])
+                if TIME[idx] < (t90stop+trigtime) and TIME[idx] > (t90start+trigtime):
+                    ene_15_25.append(rate[0])
+                    ene_25_50.append(rate[1])
+                    ene_50_100.append(rate[2])
+                    ene_100_350.append(rate[3])
+
+            else:
+                if TIME[idx] > (t90start+trigtime)-0.1*(np.absolute(t90stop - t90start)) and TIME[idx] < (t90stop+trigtime)+0.1*(np.absolute(t90stop - t90start)):
+                    ene_15_25.append(rate[0])
+                    ene_25_50.append(rate[1])
+                    ene_50_100.append(rate[2])
+                    ene_100_350.append(rate[3])
 
         norm_channels = np.sum(ene_15_25) + np.sum(ene_25_50) + \
             np.sum(ene_50_100) + np.sum(ene_100_350)
@@ -287,16 +254,9 @@ def gen_data():
             norm_ene_25_50 = ene_25_50/norm_channels
             norm_ene_50_100 = ene_50_100/norm_channels
             norm_ene_100_350 = ene_100_350/norm_channels
-
-        '''
-        if norm_fluence:
-            norm_ene_15_25 = ene_15_25/norm_fluence
-            norm_ene_25_50 = ene_25_50/norm_fluence
-            norm_ene_50_100 = ene_50_100/norm_fluence
-            norm_ene_100_350 = ene_100_350/norm_fluence
         else:
             print(trig_id)
-        '''
+            continue
 
         list_norm_ene = [norm_ene_15_25, norm_ene_25_50,
                          norm_ene_50_100, norm_ene_100_350]
@@ -315,11 +275,10 @@ def gen_data():
 
                     T90_single = abs(T90_stop[idx] - T90_start[idx])
 
-            # T90_single = abs(T90_stop - T90_start)
-
             T90_GRBs.append(T90_single)
 
             names.append(GRBname[0])
+            # names.append(elm[0])
 
             FT = np.fft.fft(padded_channels[0])/len(padded_channels[0])
 
@@ -377,28 +336,27 @@ def gen_data():
             total_rate = np.concatenate(
                 (padded_channels[0], padded_channels[1], padded_channels[2], padded_channels[3]))
 
-            if norm_channels:
+            for idx, trig in enumerate(trig_ID):
 
-                for idx, trig in enumerate(trig_ID):
+                if trig_id == str(trig):
 
-                    if trig_id == str(trig):
+                    T90_single = abs(T90_stop[idx] - T90_start[idx])
 
-                        T90_single = abs(T90_stop[idx] - T90_start[idx])
+            T90_GRBs.append(T90_single)
+            names.append(GRBname[0])
 
-                T90_GRBs.append(T90_single)
+            if FT_rate:
 
-                if FT_rate:
+                yield pd.Series(total_rate, index=[f"col{col:02d}" for col in list(range(len(total_rate)))])
 
-                    yield pd.Series(total_rate, index=[f"col{col:02d}" for col in list(range(len(total_rate)))])
+            else:
 
-                else:
+                FT = np.fft.fft(total_rate) / \
+                    len(total_rate)
 
-                    FT = np.fft.fft(total_rate) / \
-                        len(total_rate)
+                FT2 = np.power(np.absolute(FT), 2)
 
-                    FT2 = np.power(np.absolute(FT), 2)
-
-                    yield pd.Series(FT2, index=[f"col{col:02d}" for col in list(range(len(FT2)))])
+                yield pd.Series(FT2, index=[f"col{col:02d}" for col in list(range(len(FT2)))])
 
 
 df = pd.DataFrame(gen_data())
@@ -422,7 +380,7 @@ common = df_comparison['common_grb'].values
 # df.to_parquet("fft_GRBs.parquet")
 
 
-tsne = manifold.TSNE(perplexity=30.0, random_state=0)
+tsne = manifold.TSNE(perplexity=30.0, random_state=1)
 X_embedded = tsne.fit_transform(df)
 
 my_class = []
@@ -434,7 +392,7 @@ for idx, elm in enumerate(X_embedded):
     X_embedded_x.append(elm[0])
     X_embedded_y.append(elm[1])
 
-    if elm[0] < 0 and elm[0] > -18 and elm[1] < -20 and elm[1] > -45:
+    if elm[0] < 7.5 and elm[0] > -10 and elm[1] < -15 and elm[1] > -45:
         my_class.append('type_S')
     else:
         my_class.append('type_L')
@@ -457,17 +415,15 @@ df2 = df[df['classification'] == 'type_S']
 df3 = df[df['classification'] == 'type_L']
 df4 = df[df['common_jetfit_tsne'] == 'yes']
 df5 = df[df['common_jetfit_tsne'] == 'no']
-
-print(len(df4))
-print(len(df5))
-
+df6 = df4[df4['classification'] == 'type_S']
+print(df6)
 fig, ax = plt.subplots()
 
 # scatter = plt.scatter(X_embedded_x, X_embedded_y, c=(
 # np.log10(T90_GRBs)), cmap='viridis')
 # cb = plt.colorbar()
 # cb.set_label('log(T90)')
-
+'''
 plt.scatter(df4['X'], df4['Y'], c='blue', marker='*',
             alpha=1, s=100, label='Fitted GRBs')
 plt.scatter(df5['X'], df5['Y'], c='green',
@@ -477,16 +433,18 @@ plt.legend()
 plt.show()
 
 '''
+
+
 # alt.renderers.enable('altair_viewer')
 chart = alt.Chart(df).mark_point(size=80, filled=True, opacity=0.6).encode(
     x='X',
     y='Y',
     color=alt.Color('logT90', scale=alt.Scale(scheme='viridis')),
-    tooltip=['GRB_name', 'logT90', 'presence_fitsample']
+    tooltip=['GRB_name', 'logT90', 'common_jetfit_tsne']
 ).interactive()
 chart.save('interactive_scatter_color2.html')
 # chart.show()
-
+'''
 hist_SL = plt.hist([df2['logT90'], df3['logT90']], label=['S', 'L'],
                    color=['blue', 'red'], alpha=0.3, histtype='stepfilled')
 plt.legend()
