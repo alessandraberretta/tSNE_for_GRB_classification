@@ -5,13 +5,11 @@ import sys
 import os
 from astropy.io import fits
 import matplotlib.pyplot as plt
-from matplotlib import cm
-from matplotlib.colors import Normalize
 from decimal import Decimal
 from tqdm import tqdm
 from sklearn import manifold, datasets
 import scipy
-import plotly.express as px
+import altair as alt
 
 np.set_printoptions(threshold=sys.maxsize)
 
@@ -33,10 +31,9 @@ TF_before = False
 FT_rate = False
 single_channel = True
 standard = False
-long_subclass = False
 
 summary = pd.read_csv(
-    '/Users/alessandraberretta/tSNE_for_GRB_classification/summary_burst_durations.txt', delimiter='|')
+    '/Users/alessandraberretta/tSNE_for_GRB_classification/summary_reduced.csv', delimiter=',')
 trig_time = summary[' Trig_time_met '].values
 trig_ID = summary[' Trig_ID '].values
 GRB_name = summary['## GRBname '].values
@@ -205,13 +202,16 @@ def gen_data():
                     print(RATE[id])
         '''
 
+        if GRBname[0] == 'GRB150101B   ':
+            print('ciao   ')
+
         for idx, r in enumerate(RATE):
             if np.all((r == 0.0)):
                 fault_grb.append(False)
             else:
                 fault_grb.append(True)
         if not any(fault_grb):
-            # print('all 0s datafile:', GRBname[0])
+            print('all 0s datafile:', GRBname[0])
             continue
 
         for idx, rate in enumerate(RATE):
@@ -299,6 +299,8 @@ def gen_data():
             padded_channels.append(np.pad(
                 channel, (0, 2*(pow2)-len(channel)), 'constant'))
 
+        
+
         if single_channel:
 
             if GRBname[0] == 'GRB080503    ':
@@ -338,6 +340,7 @@ def gen_data():
 
             if GRBname[0].startswith('GRB2112'):
                 GRB_review.append('no')
+                print('CIAO')
             else:
                 GRB_review.append('no')
 
@@ -351,7 +354,7 @@ def gen_data():
             FT = np.fft.fft(padded_channels[0])/len(padded_channels[0])
 
             FT2 = np.power(np.absolute(FT), 2)
-            
+            '''
             if GRBname[0].startswith('GRB070809'):
                 print('found GRB070809')
                 plt.plot(FT2, color='maroon')
@@ -406,11 +409,10 @@ def gen_data():
                 plt.xlim(1,len(FT2/2))
                 plt.xscale("log")
                 plt.xlabel(r'|DTFT|$^{2}$')
-                plt.ylabel('counts')
                 plt.title("Power spectrum of kilonova-GRBs")
                 # plt.savefig('power_spectrum_GRB160821B.png')
                 # plt.close()
-            
+            '''
             yield pd.Series(FT2, index=[f"col{col:02d}" for col in list(range(len(FT2)))])
 
 
@@ -593,13 +595,6 @@ df['KN'] = KN
 df['notcollapsar'] = notcollapsar
 df['GRB_review'] = GRB_review
 
-for idx_, elm_ in enumerate(X_embedded_x):
-
-    # if elm[0] < 2.5 and elm[0] > -16 and elm[1] < -15 and elm[1] > -45:
-    if elm_ >= 32.0 and elm_ <= 40.0 and X_embedded_y[idx_] > -16 and X_embedded_y[idx_] < -8:
-        print(names_for_comparison[idx_])
-
-
 '''
 df_multiplot = pd.DataFrame()
 df_multiplot['X'] = X_embedded_x
@@ -644,10 +639,12 @@ for elmname in namelong:
     for elmname2 in GRB_name:
         if elmname in elmname2:
             new_row = summary[summary['## GRBname '].str.contains(elmname)]
-            dfsummaryreduced = dfsummaryreduced.append(new_row)
-dfsummaryreduced.to_csv('summary_reduced.csv', index=False)
-'''
+            dfsummaryreduced = dfsummaryreduced.append(new_row, ignore_index=False)
+dfsummaryreduced.to_csv('summary_reduced.csv', sep='\t')
 
+# print(longsubselection)
+sys.exit()
+'''
 df2 = df[df['classification'] == 'type_S']
 df3 = df[df['classification'] == 'type_L']
 df4 = df[df['common_jetfit_tsne'] == 'yes']
@@ -664,71 +661,11 @@ df14 = df2[df2['T90'] > 2]
 df15 = df3[df3['T90'] > 2]
 df16 = df[df['GRB_review'] == 'yes']
 df17 = df[df['GRB_name'] == '090510']
-
 fig, ax = plt.subplots()
+
 # ax = plt.gca()
 # plt.scatter(X_embedded_x, X_embedded_y, c=(
-    # np.log10(T90_GRBs)), cmap='viridis', label='GRBs of BAT sample')
-# ax = fig.add_subplot(projection='3d')
-'''
-hist, xedges, yedges, _ = plt.hist2d(X_embedded_x, X_embedded_y, bins=(5, 5), range=[[-40, 40], [-40, 40]], cmap='plasma')
-ax.axes.yaxis.set_ticklabels([])
-ax.axes.xaxis.set_ticklabels([])
-cb = plt.colorbar()
-cb.set_label('counts')
-'''
-
-fig = plt.figure()
-ax = fig.add_subplot(projection='3d')
-hist, xedges, yedges = np.histogram2d(X_embedded_x, X_embedded_y, bins=5, range=[[-40, 40], [-40, 40]])
-x_ind, y_ind = np.unravel_index(np.argmax(hist), hist.shape)
-print(f'The maximum count is {hist[x_ind][y_ind]:.0f} at index ({x_ind}, {y_ind})')
-print(f'Between x values {xedges[x_ind]} and {xedges[x_ind+1]}')
-print(f'and between y values {yedges[y_ind]} and {yedges[y_ind+1]}')
-
-
-xpos, ypos = np.meshgrid(xedges[:-1] + 0.01, yedges[:-1] + 0.01, indexing="ij")
-xpos = xpos.ravel()
-ypos = ypos.ravel()
-zpos = 0
-
-# Construct arrays with the dimensions for the 16 bars.
-dx = dy = 6 * np.ones_like(zpos)
-dz = hist.ravel()
-
-cmap = cm.get_cmap('plasma')
-norm = Normalize(vmin=min(dz), vmax=max(dz))
-colors = cmap(norm(dz))
-
-sc = cm.ScalarMappable(cmap=cmap,norm=norm)
-sc.set_array([])
-plt.colorbar(sc, label='counts')
-
-ax.bar3d(xpos, ypos, zpos, dx, dy, dz, color=colors)
-
-# fig = px.density_heatmap(df, x="X", y="Y", nbinsx=70, nbinsy=70, marginal_x="histogram", marginal_y="histogram")
-# fig.show()
-
-'''
-xpos, ypos = np.meshgrid(xedges[:-1] + 0.25, yedges[:-1] + 0.25, indexing="ij")
-xpos = xpos.ravel()
-ypos = ypos.ravel()
-zpos = 0
-
-dx = dy = 1 * np.ones_like(zpos)
-dz = hist.ravel()
-
-cmap = cm.get_cmap('plasma')
-norm = Normalize(vmin=min(dz), vmax=max(dz))
-colors = cmap(norm(dz))
-
-sc = cm.ScalarMappable(cmap=cmap,norm=norm)
-sc.set_array([])
-plt.colorbar(sc)
-
-ax.bar3d(xpos, ypos, zpos, dx, dy, dz, color=colors)
-'''
-plt.show()
+    # np.log10(T90_GRBs)), cmap='plasma', label='GRBs of BAT sample')
 # plt.scatter(df9['X'], df9['Y'], c='magenta', marker='*', edgecolors='black', alpha=0.99, s=1000, label='non-collapsar GRBs')
 # plt.scatter(df16['X'], df16['Y'], c='black', marker='*', alpha=0.99, s=400)
 # plt.scatter(df4['X'], df4['Y'], c='blue', marker='*',
@@ -741,12 +678,12 @@ plt.show()
 # alpha=0.7, s=80, label='Fitted GRBs')
 # plt.scatter(df8['X'], df8['Y'], c='purple', marker='*',
 # alpha=0.8, label='new GRBs')
-# plt.legend()
-# cb = plt.colorbar()
-# cb.set_label('log(T90)')
-# plt.arrow(0, 3, 10, 10, color='red')
+plt.legend()
+cb = plt.colorbar()
+cb.set_label('log(T90)')
 # ax.axes.yaxis.set_ticklabels([])
-# plt.show()
+plt.show()
+# plt.savefig('tsneonbig.png')
 '''
 plt.scatter(df4['X'], df4['Y'], c='blue', marker='*',
             alpha=0.8, s=80, label='Fitted GRBs')
